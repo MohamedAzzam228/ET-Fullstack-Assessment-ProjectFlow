@@ -2,10 +2,24 @@
 
 ProjectFlow is a lightweight project and task tracker for software teams.
 Organizations own projects, projects own tasks, and tasks carry a status, a
-priority and a discussion thread.
+priority, assignees, an activity audit log, and a discussion thread.
 
 It is a TypeScript monorepo: a NestJS + MongoDB API and a Next.js App Router
-frontend, sharing a small package of domain types and enums.
+frontend, sharing a package of domain types, contracts, and enums.
+
+---
+
+## Assessment Submission Highlights
+
+This repository contains the completed **Engtechno Full-Stack Developer Intern Assessment** by **Mohamed Hany Ahmed Mohamed Azzam**:
+
+- **Task Assignment Domain Feature:** Implemented `assigneeId` support with strict enforcement of all 3 business rules (project membership verification, permission validation for managers vs members, and authorized unassignment).
+- **Task Activity Audit History:** Modeled `TaskActivity` collection with indexed chronological query (`taskId`, `createdAt DESC`), single-batch hydration (no N+1), and full audit trails for assignments and unassignments.
+- **Frontend Components:** Created interactive `AssigneeSelector` with live search, permission-awareness, empty/loading states, optimistic updates, and rollback; integrated `ActivityTimeline` with relative timestamps and pagination.
+- **Production Bug Fix (BOLA / IDOR):** Identified and resolved missing authorization in `PATCH /tasks/:taskId/status` (detailed in [`BUG_REPORT.md`](file:///./BUG_REPORT.md)).
+- **Concurrency Fix:** Replaced naive `countDocuments()` numbering with atomic `ProjectCounter` sequence incrementation via MongoDB `findOneAndUpdate`.
+- **Automated Test Suite:** Comprehensive test coverage in `apps/api/test/task-assignment.e2e.spec.ts` covering all 9 assessment-mandated scenarios.
+- **Documentation:** Included [`ASSESSMENT_NOTES.md`](file:///./ASSESSMENT_NOTES.md), [`BUG_REPORT.md`](file:///./BUG_REPORT.md), [`AI_LOG.md`](file:///./AI_LOG.md), and [`.env.example`](file:///./.env.example).
 
 ---
 
@@ -29,7 +43,7 @@ frontend, sharing a small package of domain types and enums.
 
 - **Node.js 20.19+** (22 or 24 recommended)
 - **pnpm 10+** — `npm install -g pnpm`
-- **MongoDB 7+** running locally
+- **MongoDB 7+** running locally (or use Docker / Mongo Atlas)
 
 On macOS:
 
@@ -51,8 +65,7 @@ pnpm install
 
 ## Environment setup
 
-Configuration lives in a single `.env` file at the repository root; both apps
-read it.
+Configuration lives in a single `.env` file at the repository root; both apps read it.
 
 ```bash
 cp .env.example .env
@@ -78,7 +91,7 @@ pnpm seed
 ```
 
 The seed is repeatable — it clears the ProjectFlow collections and reinserts a
-fresh organization, users, projects, tasks and comments.
+fresh organization, users, projects, tasks, and comments.
 
 ## Running the apps
 
@@ -130,9 +143,8 @@ pnpm dev
 | `pnpm seed`      | Reset and reload development data          |
 | `pnpm format`    | Prettier write                             |
 
-`pnpm test` does not need a running MongoDB — it starts a throwaway in-memory
-server for the duration of the run. The first run downloads a MongoDB binary
-(around 100 MB) and caches it.
+`pnpm test` does not need an external running MongoDB — it starts a throwaway in-memory
+server (`mongodb-memory-server`) for the duration of the run.
 
 ---
 
@@ -147,8 +159,6 @@ Seeded accounts, all sharing the password `Password123!`:
 | Ahmed Hassan | `ahmed@example.com`   | Project manager on `ENG`  |
 | Magd Ali     | `magd@example.com`    | Member of `ENG` and `WEB` |
 | Outside User | `outside@example.com` | No organization           |
-
-These are local development accounts only.
 
 ---
 
@@ -165,7 +175,7 @@ projectflow/
 │   │   │   ├── organization-members/
 │   │   │   ├── projects/        projects + ProjectAccessService
 │   │   │   ├── project-members/
-│   │   │   ├── tasks/
+│   │   │   ├── tasks/           tasks, assignment, activities, counter
 │   │   │   ├── comments/
 │   │   │   ├── common/          guards, decorators, filters, shared DTOs
 │   │   │   └── database/seed.ts
@@ -185,39 +195,18 @@ projectflow/
     └── tsconfig/                base TypeScript configs
 ```
 
-### API layering
-
-Each module follows the same shape: controller → service → Mongoose model, with
-DTOs validating input at the boundary. Controllers stay thin; business rules
-live in services.
-
-### Domain model
+### Domain Model
 
 ```
 User
 Organization        ── OrganizationMember ── User      (OWNER | ADMIN | MEMBER)
 Organization  ── Project
 Project             ── ProjectMember      ── User      (PROJECT_MANAGER | MEMBER)
+Project             ── ProjectCounter                  (Atomic sequential numbering)
 Project       ── Task ── Comment
+                 │
+                 └── TaskActivity ── User (actor)
 ```
-
-Membership is stored in its own collection rather than as arrays on the parent
-document, so it can be indexed and queried directly. Both membership
-collections carry a unique compound index on their two foreign keys.
-
-Tasks are numbered per project and identified by a human-readable key derived
-from the project key: `ENG-1`, `ENG-2`, `WEB-1`.
-
-### Authorization
-
-`ProjectAccessService` answers "may this user touch this project?" in one
-place. Access comes from either an elevated organization role (`OWNER` or
-`ADMIN`, which grants access to every project in the organization) or an
-explicit project membership row. `assertCanView` gates reads, `assertCanManage`
-gates configuration and membership changes.
-
-Authentication is a JWT bearer token. `JwtAuthGuard` is registered globally;
-routes opt out with the `@Public()` decorator.
 
 ### API surface
 
@@ -239,13 +228,15 @@ POST   /projects/:projectId/tasks
 GET    /tasks/:taskId
 PATCH  /tasks/:taskId
 PATCH  /tasks/:taskId/status
+PATCH  /tasks/:taskId/assign          <-- New (Task Assignment)
+GET    /tasks/:taskId/activity        <-- New (Task Activity History)
 DELETE /tasks/:taskId
 
 GET    /tasks/:taskId/comments
 POST   /tasks/:taskId/comments
 ```
 
-Errors share one shape:
+Errors share one uniform shape:
 
 ```json
 {
@@ -254,14 +245,3 @@ Errors share one shape:
   "error": "Forbidden"
 }
 ```
-
-### Frontend
-
-Routes are thin; the work happens in `features/`. Server state is owned by
-TanStack Query — query keys live in `lib/query-keys.ts` so invalidation stays
-predictable — and local UI state stays in React. The API client in
-`lib/api-client.ts` centralises the base URL, the auth header and error
-parsing.
-
-Components are server components by default; `"use client"` is added only where
-interactivity or hooks require it.
