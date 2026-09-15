@@ -1,13 +1,15 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated, TaskDetail, TaskStatus, TaskSummary } from '@projectflow/shared';
+import type { Paginated, TaskActivity, TaskDetail, TaskStatus, TaskSummary } from '@projectflow/shared';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  assignTask,
   createTask,
   type CreateTaskPayload,
   fetchProjectTasks,
   fetchTask,
+  fetchTaskActivity,
   updateTaskStatus,
 } from './api';
 
@@ -50,5 +52,42 @@ export function useUpdateTaskStatus(taskId: string, projectId: string) {
       queryClient.setQueryData(queryKeys.task(taskId), task);
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
     },
+  });
+}
+
+export function useAssignTask(taskId: string, projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<TaskDetail, Error, string | null, { previousTask?: TaskDetail }>({
+    mutationFn: (assigneeId) => assignTask(taskId, assigneeId),
+    onMutate: async () => {
+      // Cancel outgoing refetches so they don't overwrite optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.task(taskId) });
+      const previousTask = queryClient.getQueryData<TaskDetail>(queryKeys.task(taskId));
+      return { previousTask };
+    },
+    onError: (_err, _newAssigneeId, context) => {
+      if (context?.previousTask) {
+        queryClient.setQueryData(queryKeys.task(taskId), context.previousTask);
+      }
+    },
+    onSuccess: (updatedTask) => {
+      queryClient.setQueryData(queryKeys.task(taskId), updatedTask);
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.taskActivity(taskId) }),
+      ]);
+    },
+  });
+}
+
+export function useTaskActivity(taskId: string, page = 1, pageSize = 20) {
+  return useQuery<Paginated<TaskActivity>>({
+    queryKey: [...queryKeys.taskActivity(taskId), page, pageSize],
+    queryFn: () => fetchTaskActivity(taskId, page, pageSize),
+    enabled: taskId.length > 0,
   });
 }
