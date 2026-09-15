@@ -49,6 +49,7 @@ export interface TaskSummary {
   status: TaskStatus;
   priority: TaskPriority;
   commentCount: number;
+  assignee: UserSummary | null;
   createdBy: UserSummary;
   createdAt: string;
   updatedAt: string;
@@ -57,6 +58,19 @@ export interface TaskSummary {
 export interface TaskDetail extends TaskSummary {
   description?: string | null;
   project: Pick<ProjectSummary, 'id' | 'name' | 'key'>;
+}
+
+/** A single entry in a task's activity history. */
+export interface TaskActivity {
+  id: string;
+  type: 'TASK_ASSIGNEE_CHANGED';
+  actor: UserSummary;
+  taskId: string;
+  metadata: {
+    from: UserSummary | null;
+    to: UserSummary | null;
+  };
+  createdAt: string;
 }
 
 export interface CommentEntry {
