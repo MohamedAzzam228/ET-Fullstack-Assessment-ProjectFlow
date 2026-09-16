@@ -10,7 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand --passWithNoTests",
     "test:watch": "jest --watch",
-    "seed": "node dist/database/seed.js"
+    "migrate": "node dist/database/migrate.js",
+    "seed": "node dist/database/seed.js",
+    "db:setup": "node dist/database/migrate.js && node dist/database/seed.js"
   },
   "dependencies": {
     "@nestjs/common": "11.2.3",

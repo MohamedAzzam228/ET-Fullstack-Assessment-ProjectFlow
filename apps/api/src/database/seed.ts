@@ -1,6 +1,8 @@
 /**
- * Development seed. Wipes the ProjectFlow collections and inserts a small,
- * realistic dataset so the app is usable immediately after a fresh checkout.
+ * Development seed. Wipes the ProjectFlow collections and inserts a realistic,
+ * comprehensive dataset so the app is fully usable immediately after a fresh checkout.
+ * 
+ * Includes Task Assignments, Activity Timeline events, and initialized ProjectCounters.
  */
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
@@ -14,6 +16,8 @@ import { ProjectSchema } from '../projects/schemas/project.schema';
 import { TaskSchema } from '../tasks/schemas/task.schema';
 import { CommentSchema } from '../comments/schemas/comment.schema';
 import { UserSchema } from '../users/schemas/user.schema';
+import { TaskActivitySchema } from '../tasks/schemas/task-activity.schema';
+import { ProjectCounterSchema } from '../tasks/schemas/project-counter.schema';
 
 loadEnv({ path: resolve(__dirname, '../../../../.env'), quiet: true });
 loadEnv({ quiet: true });
@@ -28,6 +32,8 @@ const Project = mongoose.model('Project', ProjectSchema);
 const ProjectMember = mongoose.model('ProjectMember', ProjectMemberSchema);
 const Task = mongoose.model('Task', TaskSchema);
 const Comment = mongoose.model('Comment', CommentSchema);
+const TaskActivity = mongoose.model('TaskActivity', TaskActivitySchema);
+const ProjectCounter = mongoose.model('ProjectCounter', ProjectCounterSchema);
 
 interface SeedUser {
   name: string;
@@ -43,13 +49,16 @@ const SEED_USERS: SeedUser[] = [
   { name: 'Outside User', email: 'outside@example.com', organizationRole: null },
 ];
 
-async function seed(): Promise<void> {
+export async function seed(): Promise<void> {
+  console.log(`\n🌱 [Seed] Connecting to MongoDB: ${MONGODB_URI}`);
   await mongoose.connect(MONGODB_URI);
-  console.warn(`Connected to ${MONGODB_URI}`);
 
+  console.log('🧹 [Seed 1/5] Purging existing database collections...');
   await Promise.all([
     Comment.deleteMany({}),
+    TaskActivity.deleteMany({}),
     Task.deleteMany({}),
+    ProjectCounter.deleteMany({}),
     ProjectMember.deleteMany({}),
     Project.deleteMany({}),
     OrganizationMember.deleteMany({}),
@@ -57,6 +66,7 @@ async function seed(): Promise<void> {
     User.deleteMany({}),
   ]);
 
+  console.log('👤 [Seed 2/5] Seeding users and organizations...');
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
   const users = await User.insertMany(
     SEED_USERS.map((user) => ({
@@ -95,6 +105,7 @@ async function seed(): Promise<void> {
     })),
   );
 
+  console.log('📁 [Seed 3/5] Seeding projects and memberships...');
   const [internalPlatform, customerPortal] = await Project.insertMany([
     {
       organizationId: organization._id,
@@ -123,6 +134,7 @@ async function seed(): Promise<void> {
     { projectId: customerPortal._id, userId: magd, role: ProjectRole.MEMBER },
   ]);
 
+  console.log('📋 [Seed 4/5] Seeding tasks with assignments and project counters...');
   const engineeringTasks = [
     {
       number: 1,
@@ -132,6 +144,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.IN_PROGRESS,
       priority: TaskPriority.HIGH,
       createdBy: ammar,
+      assigneeId: ahmed,
     },
     {
       number: 2,
@@ -141,6 +154,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.TODO,
       priority: TaskPriority.MEDIUM,
       createdBy: sarah,
+      assigneeId: null,
     },
     {
       number: 3,
@@ -150,6 +164,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.TODO,
       priority: TaskPriority.LOW,
       createdBy: ahmed,
+      assigneeId: null,
     },
     {
       number: 4,
@@ -159,6 +174,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.IN_REVIEW,
       priority: TaskPriority.URGENT,
       createdBy: magd,
+      assigneeId: magd,
     },
     {
       number: 5,
@@ -168,6 +184,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.DONE,
       priority: TaskPriority.MEDIUM,
       createdBy: ammar,
+      assigneeId: ammar,
     },
     {
       number: 6,
@@ -176,6 +193,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.TODO,
       priority: TaskPriority.LOW,
       createdBy: ahmed,
+      assigneeId: null,
     },
   ].map((task) => ({
     ...task,
@@ -191,6 +209,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.IN_PROGRESS,
       priority: TaskPriority.HIGH,
       createdBy: sarah,
+      assigneeId: sarah,
     },
     {
       number: 2,
@@ -199,6 +218,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.TODO,
       priority: TaskPriority.LOW,
       createdBy: magd,
+      assigneeId: null,
     },
     {
       number: 3,
@@ -208,6 +228,7 @@ async function seed(): Promise<void> {
       status: TaskStatus.IN_REVIEW,
       priority: TaskPriority.URGENT,
       createdBy: sarah,
+      assigneeId: magd,
     },
   ].map((task) => ({
     ...task,
@@ -225,6 +246,13 @@ async function seed(): Promise<void> {
     return id;
   };
 
+  // Initialize atomic project counters to match the highest task numbers
+  await ProjectCounter.insertMany([
+    { projectId: internalPlatform._id, seq: engineeringTasks.length },
+    { projectId: customerPortal._id, seq: portalTasks.length },
+  ]);
+
+  console.log('💬 [Seed 5/5] Seeding comments and activity audit logs...');
   await Comment.insertMany([
     {
       taskId: taskId('ENG-1'),
@@ -255,16 +283,77 @@ async function seed(): Promise<void> {
     },
   ]);
 
-  console.warn(
+  // Seed realistic task activity audit logs
+  const now = Date.now();
+  await TaskActivity.insertMany([
+    {
+      taskId: taskId('ENG-1'),
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actorId: ammar,
+      metadata: { fromId: null, toId: ahmed },
+      createdAt: new Date(now - 1000 * 60 * 60 * 24 * 2), // 2 days ago
+    },
+    {
+      taskId: taskId('ENG-4'),
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actorId: ahmed,
+      metadata: { fromId: null, toId: magd },
+      createdAt: new Date(now - 1000 * 60 * 60 * 24 * 1), // 1 day ago
+    },
+    {
+      taskId: taskId('ENG-5'),
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actorId: ammar,
+      metadata: { fromId: null, toId: ammar },
+      createdAt: new Date(now - 1000 * 60 * 60 * 3), // 3 hours ago
+    },
+    {
+      taskId: taskId('WEB-1'),
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actorId: sarah,
+      metadata: { fromId: null, toId: sarah },
+      createdAt: new Date(now - 1000 * 60 * 60 * 24 * 1), // 1 day ago
+    },
+    {
+      taskId: taskId('WEB-3'),
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actorId: sarah,
+      metadata: { fromId: null, toId: magd },
+      createdAt: new Date(now - 1000 * 60 * 60 * 5), // 5 hours ago
+    },
+  ]);
+
+  // Sync indexes
+  await Promise.all([
+    User.syncIndexes(),
+    Organization.syncIndexes(),
+    OrganizationMember.syncIndexes(),
+    Project.syncIndexes(),
+    ProjectMember.syncIndexes(),
+    Task.syncIndexes(),
+    Comment.syncIndexes(),
+    TaskActivity.syncIndexes(),
+    ProjectCounter.syncIndexes(),
+  ]);
+
+  console.log(
     [
       '',
-      'Seed complete.',
-      `  users:         ${users.length}`,
-      '  organizations: 1',
-      '  projects:      2',
-      `  tasks:         ${tasks.length}`,
+      '==================================================',
+      '✅ Database Seeding and Reproduction Complete!',
+      '==================================================',
+      `  • Users:          ${users.length}`,
+      '  • Organizations:  1',
+      '  • Projects:       2',
+      `  • Tasks:          ${tasks.length} (with seeded assignees)`,
+      '  • ProjectCounters:2 (ENG: 6, WEB: 3)',
+      '  • Comments:       5',
+      '  • TaskActivities: 5 (assignment history)',
+      '  • Compound Indexes: Synced across all 9 collections',
       '',
-      `  Sign in with any seeded email and the password: ${SEED_PASSWORD}`,
+      `  Sign in with any seeded email and password: ${SEED_PASSWORD}`,
+      '  Example: ammar@example.com (Org Owner) / sarah@example.com (Admin)',
+      '==================================================',
       '',
     ].join('\n'),
   );
@@ -272,8 +361,10 @@ async function seed(): Promise<void> {
   await mongoose.disconnect();
 }
 
-seed().catch(async (error: unknown) => {
-  console.error(error);
-  await mongoose.disconnect().catch(() => undefined);
-  process.exit(1);
-});
+if (require.main === module) {
+  seed().catch(async (error: unknown) => {
+    console.error('❌ Seed failed:', error);
+    await mongoose.disconnect().catch(() => undefined);
+    process.exit(1);
+  });
+}

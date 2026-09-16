@@ -12,7 +12,9 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "migrate": "turbo run migrate --filter=@projectflow/api",
     "seed": "turbo run seed --filter=@projectflow/api",
+    "db:setup": "turbo run db:setup --filter=@projectflow/api",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\""
   },

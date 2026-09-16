@@ -32,6 +32,14 @@
     "seed": {
       "dependsOn": ["build"],
       "cache": false
+    },
+    "migrate": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "db:setup": {
+      "dependsOn": ["build"],
+      "cache": false
     }
   }
 }
