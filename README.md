@@ -19,7 +19,25 @@ This repository contains the completed **Engtechno Full-Stack Developer Intern A
 - **Production Bug Fix (BOLA / IDOR):** Identified and resolved missing authorization in `PATCH /tasks/:taskId/status` (detailed in [`BUG_REPORT.md`](file:///./BUG_REPORT.md)).
 - **Concurrency Fix:** Replaced naive `countDocuments()` numbering with atomic `ProjectCounter` sequence incrementation via MongoDB `findOneAndUpdate`.
 - **Automated Test Suite:** Comprehensive test coverage in `apps/api/test/task-assignment.e2e.spec.ts` covering all 9 assessment-mandated scenarios.
-- **Documentation:** Included [`ASSESSMENT_NOTES.md`](file:///./ASSESSMENT_NOTES.md), [`BUG_REPORT.md`](file:///./BUG_REPORT.md), [`AI_LOG.md`](file:///./AI_LOG.md), and [`.env.example`](file:///./.env.example).
+- **Documentation:** Included [`ASSESSMENT_NOTES.md`](./ASSESSMENT_NOTES.md), [`BUG_REPORT.md`](./BUG_REPORT.md), [`AI_LOG.md`](./AI_LOG.md), and [`.env.example`](./.env.example).
+
+---
+
+## Live Demo & Interactive Walkthrough
+
+Here is an interactive walkthrough demonstration showing the application running locally with real-time Task Assignment, Activity Timeline, and Optimistic UI updates in action:
+
+![ProjectFlow Live Demo Walkthrough](docs/demo/live-demo.webp)
+
+### Key User Flows Highlighted in the Demo:
+1. **Interactive Assignee Selection:** Live search filtering of project members with instant optimistic UI badge updates.
+2. **Real-Time Activity Audit Trail:** Automatic generation of structured activity history (`User assigned to Member`), formatted with relative timestamps (`just now`).
+3. **Reassignment & Unassignment Lifecycle:** Seamless transitions between assignees and clearing assignments with audit logging.
+4. **Security & Permissions:** Enforcing project-boundary assignment rules and verified status transitions.
+
+| Task Overview & Assignee Selector | Member Assignment & Optimistic Badge | Activity History & Audit Trail |
+| :---: | :---: | :---: |
+| ![Task Overview](docs/demo/task-detail.png) | ![Assigned Task](docs/demo/assigned-task.png) | ![Activity Timeline](docs/demo/reassigned-task.png) |
 
 ---
 
